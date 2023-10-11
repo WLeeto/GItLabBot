@@ -1,0 +1,33 @@
+version: "3"
+
+volumes:
+ gitlab_bot_postgres_data: {}
+#  onboarding_bot_postgres_data_backups: {}
+
+services:
+ postgres:
+   build:
+     context: .
+     dockerfile: ./compose/production/postgres/Dockerfile
+   image: gitlab_bot_production_postgres
+   container_name: gitlab_bot_local_postgres
+   hostname: postgres
+   volumes:
+     - gitlab_bot_postgres_data:/var/lib/postgresql/data
+     - ./backups/:/backups
+   env_file:
+     - ./.envs/.local/.postgres
+   ports:
+     - "9042:5432"
+ web:
+    build: .
+    container_name: gitlab_bot
+    command: python main.py
+    ports:
+      - 9080:3001
+    volumes:
+      - ./:/app
+    env_file:
+      - .envs/.bot
+    depends_on:
+     - postgres

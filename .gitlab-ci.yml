@@ -1,0 +1,49 @@
+stages:
+  # - lint
+  # - test
+  - deploy
+
+# Deployment
+# ------------------------------------------------------------------------------
+.ssh_connection: &ssh_connection
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - eval $(ssh-agent -s)
+  - echo "$CD_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+  - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+  - ssh-keyscan -t rsa  $CD_SERVER_HOST >> ~/.ssh/known_hosts
+
+dev-deploy:
+  stage: deploy
+  tags:
+    - shell
+  only:
+    - main
+  variables:
+    CD_STAGING_SERVER_PORT: '22'
+    DEPLOY_BRANCH: $CI_COMMIT_BRANCH
+    DC_FILE: $CD_DC_FILE
+  before_script:
+    - *ssh_connection
+  script:
+    - |
+        ssh \
+          -p $CD_STAGING_SERVER_PORT \
+          -o StrictHostKeyChecking=no \
+          -o PasswordAuthentication=no \
+            $CD_SERVER_USER@$CD_SERVER_HOST \
+              /bin/bash -s << EOT
+        echo "## Deploy!"
+        cd $CD_SERVER_APP_PATH
+
+        echo "### Update Repository"
+        # TODO: Защита от дурака!
+        git checkout $DEPLOY_BRANCH;
+        git pull origin $DEPLOY_BRANCH;
+
+        echo "### Restart docker-compose"
+        docker compose -f '$CD_DC_FILE' down
+        docker compose -f '$CD_DC_FILE' up --build -d
+
+        exit
+        EOT
